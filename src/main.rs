@@ -1,3 +1,6 @@
+use neur::Config;
+
 fn main() {
-    println!("Hello, world!");
+    let config = Config::parse().unwrap();
+    dbg!(config);
 }
