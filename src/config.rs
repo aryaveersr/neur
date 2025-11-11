@@ -10,7 +10,7 @@ pub struct Config {
 
 impl Config {
     pub fn parse() -> Result<Self, ConfigError> {
-        Options::new().map(Into::into)
+        Ok(Options::new()?.try_into()?)
     }
 }
 
@@ -18,6 +18,7 @@ impl Config {
 pub enum ConfigError {
     ParseError(toml::de::Error),
     IoError(std::io::Error),
+    ValidationError(String),
 }
 
 impl From<toml::de::Error> for ConfigError {
@@ -71,11 +72,25 @@ impl Options {
     }
 }
 
-impl From<Options> for Config {
-    fn from(opts: Options) -> Self {
-        Config {
+impl TryFrom<Options> for Config {
+    type Error = ConfigError;
+
+    fn try_from(opts: Options) -> Result<Self, Self::Error> {
+        let cfg = Config {
             source: opts.source.unwrap_or("src".into()),
             output: opts.output.unwrap_or("dist".into()),
+        };
+
+        if cfg.output.starts_with(&cfg.source) {
+            return Err(ConfigError::ValidationError(
+                "Output directory can't be under source directory.".into(),
+            ));
+        } else if cfg.source.starts_with(&cfg.output) {
+            return Err(ConfigError::ValidationError(
+                "Source directory can't be under output directory.".into(),
+            ));
         }
+
+        Ok(cfg)
     }
 }
