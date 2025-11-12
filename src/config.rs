@@ -6,6 +6,7 @@ use std::{fs, path::PathBuf};
 pub struct Config {
     pub source: PathBuf,
     pub output: PathBuf,
+    pub minify: bool,
 }
 
 impl Config {
@@ -41,6 +42,13 @@ struct Options {
     #[arg(short, long, value_name = "DIR")]
     output: Option<PathBuf>,
 
+    #[arg(skip)]
+    minify: Option<bool>,
+
+    #[serde(skip)]
+    #[arg(short, long = "minify")]
+    _minify_cli: Option<Option<bool>>,
+
     #[serde(skip)]
     #[arg(short, long, value_name = "FILE")]
     config: Option<PathBuf>,
@@ -68,6 +76,7 @@ impl Options {
     fn merge(mut self, rhs: Self) -> Self {
         self.source = self.source.or(rhs.source);
         self.output = self.output.or(rhs.output);
+        self.minify = self._minify_cli.map(|o| o.unwrap_or(true)).or(rhs.minify);
         self
     }
 }
@@ -79,6 +88,7 @@ impl TryFrom<Options> for Config {
         let cfg = Config {
             source: opts.source.unwrap_or("src".into()),
             output: opts.output.unwrap_or("dist".into()),
+            minify: opts.minify.unwrap_or(false),
         };
 
         if cfg.output.starts_with(&cfg.source) {

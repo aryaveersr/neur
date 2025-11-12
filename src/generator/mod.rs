@@ -63,12 +63,13 @@ impl Generator {
         let contents = fs::read_to_string(path)?;
         let mut styles = StyleSheet::parse(&contents, ParserOptions::default())?;
 
-        styles.minify(MinifyOptions::default())?;
+        let printer_opts = PrinterOptions {
+            minify: self.config.minify,
+            ..Default::default()
+        };
 
-        fs::write(
-            self.dest(path),
-            styles.to_css(PrinterOptions::default())?.code,
-        )?;
+        styles.minify(MinifyOptions::default())?;
+        fs::write(self.dest(path), styles.to_css(printer_opts)?.code)?;
 
         Ok(())
     }
