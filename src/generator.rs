@@ -8,16 +8,25 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use tera::{Context, Tera};
 
 pub type Result<T> = std::result::Result<T, GeneratorError>;
 
 pub struct Generator {
     config: Config,
+    tera: Tera,
 }
 
 impl Generator {
-    pub fn new(config: Config) -> Self {
-        Self { config }
+    pub fn new(config: Config) -> Result<Self> {
+        let mut source_glob = config.source.clone();
+        source_glob.push("**");
+        source_glob.push("*");
+
+        Ok(Self {
+            config,
+            tera: Tera::new(source_glob.to_str().unwrap())?,
+        })
     }
 
     pub fn run(&mut self) -> Result<()> {
@@ -49,8 +58,9 @@ impl Generator {
 
         match extension {
             "css" => self.css(path)?,
-            "html" => self.html(path)?,
             "md" => self.markdown(path)?,
+            "html" => self.html(path)?,
+
             _ => {
                 fs::copy(path, self.dest(path))?;
             }
@@ -74,8 +84,20 @@ impl Generator {
         Ok(())
     }
 
-    fn html(&mut self, _path: &Path) -> Result<()> {
-        todo!()
+    fn html(&mut self, path: &Path) -> Result<()> {
+        let filename = path.file_name().unwrap().to_str().unwrap();
+        let is_escaped = filename.starts_with("_") && !filename.starts_with("__");
+
+        if !is_escaped {
+            let trimmed_path = path.components().skip(1).collect::<PathBuf>();
+            let rendered = self
+                .tera
+                .render(trimmed_path.to_str().unwrap(), &Context::new())?;
+
+            fs::write(self.dest(path), rendered)?;
+        }
+
+        Ok(())
     }
 
     fn markdown(&mut self, _path: &Path) -> Result<()> {
@@ -91,18 +113,25 @@ impl Generator {
 
 #[derive(Debug)]
 pub enum GeneratorError {
-    IoError(std::io::Error),
-    CssError(String),
+    Io(std::io::Error),
+    Css(String),
+    Html(tera::Error),
 }
 
 impl From<std::io::Error> for GeneratorError {
     fn from(value: std::io::Error) -> Self {
-        Self::IoError(value)
+        Self::Io(value)
     }
 }
 
 impl<T: Display> From<lightningcss::error::Error<T>> for GeneratorError {
     fn from(value: lightningcss::error::Error<T>) -> Self {
-        Self::CssError(value.to_string())
+        Self::Css(value.to_string())
+    }
+}
+
+impl From<tera::Error> for GeneratorError {
+    fn from(value: tera::Error) -> Self {
+        Self::Html(value)
     }
 }
