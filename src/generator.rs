@@ -3,6 +3,7 @@ use lightningcss::{
     printer::PrinterOptions,
     stylesheet::{MinifyOptions, ParserOptions, StyleSheet},
 };
+use minify_html::Cfg;
 use std::{
     fmt::Display,
     fs,
@@ -94,7 +95,14 @@ impl Generator {
                 .tera
                 .render(trimmed_path.to_str().unwrap(), &Context::new())?;
 
-            fs::write(self.dest(path), rendered)?;
+            if self.config.minify {
+                fs::write(
+                    self.dest(path),
+                    minify_html::minify(rendered.as_bytes(), &Cfg::default()),
+                )?;
+            } else {
+                fs::write(self.dest(path), rendered)?;
+            }
         }
 
         Ok(())
