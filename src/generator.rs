@@ -1,10 +1,12 @@
 use crate::Config;
+use comrak::Options;
 use lightningcss::{
     printer::PrinterOptions,
     stylesheet::{MinifyOptions, ParserOptions, StyleSheet},
 };
 use minify_html::Cfg;
 use std::{
+    collections::HashMap,
     fmt::Display,
     fs,
     path::{Path, PathBuf},
@@ -16,16 +18,16 @@ pub type Result<T> = std::result::Result<T, GeneratorError>;
 pub struct Generator {
     config: Config,
     tera: Tera,
+    templates: Vec<PathBuf>,
 }
 
 impl Generator {
     pub fn new(config: Config) -> Result<Self> {
-        let mut source_glob = config.source.clone();
-        source_glob.push("**");
-        source_glob.push("*");
+        let source_glob = config.source.join("**/*");
 
         Ok(Self {
             config,
+            templates: Vec::new(),
             tera: Tera::new(source_glob.to_str().unwrap())?,
         })
     }
@@ -57,15 +59,21 @@ impl Generator {
             None => "",
         };
 
+        let mut markdown_paths = Vec::new();
+
         match extension {
             "css" => self.css(path)?,
-            "md" => self.markdown(path)?,
             "html" => self.html(path)?,
+            "md" => markdown_paths.push(path.to_path_buf()),
 
             _ => {
                 fs::copy(path, self.dest(path))?;
             }
         };
+
+        for path in markdown_paths {
+            self.markdown(&path)?;
+        }
 
         Ok(())
     }
@@ -103,13 +111,60 @@ impl Generator {
             } else {
                 fs::write(self.dest(path), rendered)?;
             }
+        } else if filename == "_template.html" {
+            self.templates.push(path.parent().unwrap().into());
         }
 
         Ok(())
     }
 
-    fn markdown(&mut self, _path: &Path) -> Result<()> {
-        todo!()
+    fn markdown(&mut self, path: &Path) -> Result<()> {
+        let contents = fs::read_to_string(path)?;
+        let mut context = Context::new();
+
+        let mut options = Options::default();
+        options.extension.front_matter_delimiter = Some("---".into());
+
+        context.try_insert("content", &comrak::markdown_to_html(&contents, &options))?;
+
+        let (props, _): (HashMap<String, toml::Value>, _) = markdown_frontmatter::parse(&contents)?;
+
+        for (key, value) in props {
+            context.try_insert(key, &value)?;
+        }
+
+        let rendered = if self.templates.contains(&path.parent().unwrap().into()) {
+            let trimmed_path = path
+                .parent()
+                .unwrap()
+                .join("_template.html")
+                .components()
+                .skip(1)
+                .collect::<PathBuf>();
+
+            dbg!(&trimmed_path);
+
+            self.tera.autoescape_on(vec![]);
+            let rendered = self.tera.render(trimmed_path.to_str().unwrap(), &context)?;
+            self.tera.autoescape_on(vec![".html", ".htm", ".xml"]);
+
+            rendered
+        } else {
+            Tera::one_off(include_str!("default.html"), &context, false)?
+        };
+
+        let dest = self.dest(path).with_extension("html");
+
+        if self.config.minify {
+            fs::write(
+                dest,
+                minify_html::minify(rendered.as_bytes(), &Cfg::default()),
+            )?;
+        } else {
+            fs::write(dest, rendered)?;
+        }
+
+        Ok(())
     }
 
     fn dest(&self, path: &Path) -> PathBuf {
@@ -124,6 +179,8 @@ pub enum GeneratorError {
     Io(std::io::Error),
     Css(String),
     Html(tera::Error),
+    Toml(toml::de::Error),
+    Frontmatter(markdown_frontmatter::Error),
 }
 
 impl From<std::io::Error> for GeneratorError {
@@ -141,5 +198,17 @@ impl<T: Display> From<lightningcss::error::Error<T>> for GeneratorError {
 impl From<tera::Error> for GeneratorError {
     fn from(value: tera::Error) -> Self {
         Self::Html(value)
+    }
+}
+
+impl From<toml::de::Error> for GeneratorError {
+    fn from(value: toml::de::Error) -> Self {
+        Self::Toml(value)
+    }
+}
+
+impl From<markdown_frontmatter::Error> for GeneratorError {
+    fn from(value: markdown_frontmatter::Error) -> Self {
+        Self::Frontmatter(value)
     }
 }
