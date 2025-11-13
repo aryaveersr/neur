@@ -1,5 +1,9 @@
 use crate::Config;
-use lightningcss::{printer::PrinterOptions, stylesheet::StyleSheet};
+use lightningcss::{
+    printer::PrinterOptions,
+    stylesheet::StyleSheet,
+    targets::{Browsers, Targets},
+};
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
@@ -85,6 +89,14 @@ impl Generator {
         let output = styles
             .to_css(PrinterOptions {
                 minify: self.config.minify,
+                targets: Targets {
+                    browsers: Some(
+                        Browsers::from_browserslist(std::iter::once("last 4 years"))
+                            .unwrap()
+                            .unwrap(),
+                    ),
+                    ..Default::default()
+                },
                 ..Default::default()
             })
             .map_err(|err| (path, err))?;

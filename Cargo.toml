@@ -6,8 +6,10 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 comrak = "0.47"
-lightningcss = "1.0.0-alpha.68"
-markdown-frontmatter = { version = "0.4", default-features = false, features = ["yaml"] }
+lightningcss = { version = "1.0.0-alpha.68", features = ["browserslist"] }
+markdown-frontmatter = { version = "0.4", default-features = false, features = [
+  "yaml"
+] }
 minify-html = "0.18"
 serde = { version = "1.0", features = ["derive"] }
 tera = "1.20"
