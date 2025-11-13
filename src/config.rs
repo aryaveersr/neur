@@ -1,6 +1,6 @@
 use clap::Parser;
 use serde::Deserialize;
-use std::{fs, path::PathBuf};
+use std::{fmt::Debug, fs, path::PathBuf};
 
 #[derive(Debug)]
 pub struct Config {
@@ -12,25 +12,6 @@ pub struct Config {
 impl Config {
     pub fn parse() -> Result<Self, ConfigError> {
         Options::new()?.try_into()
-    }
-}
-
-#[derive(Debug)]
-pub enum ConfigError {
-    Parser(toml::de::Error),
-    Io(std::io::Error),
-    Validation(String),
-}
-
-impl From<toml::de::Error> for ConfigError {
-    fn from(value: toml::de::Error) -> Self {
-        ConfigError::Parser(value)
-    }
-}
-
-impl From<std::io::Error> for ConfigError {
-    fn from(value: std::io::Error) -> Self {
-        ConfigError::Io(value)
     }
 }
 
@@ -102,5 +83,41 @@ impl TryFrom<Options> for Config {
         }
 
         Ok(cfg)
+    }
+}
+
+pub enum ConfigError {
+    Parser(toml::de::Error),
+    Io(std::io::Error),
+    Validation(String),
+}
+
+impl From<toml::de::Error> for ConfigError {
+    fn from(value: toml::de::Error) -> Self {
+        ConfigError::Parser(value)
+    }
+}
+
+impl From<std::io::Error> for ConfigError {
+    fn from(value: std::io::Error) -> Self {
+        ConfigError::Io(value)
+    }
+}
+
+impl Debug for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Parser(err) => {
+                writeln!(f, "While parsing the configuration file:")?;
+                write!(f, "{}", err.message())
+            }
+
+            Self::Io(err) => write!(f, "{err}"),
+
+            Self::Validation(err) => {
+                writeln!(f, "Invalid configuration:")?;
+                write!(f, "{err}")
+            }
+        }
     }
 }

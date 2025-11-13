@@ -2,6 +2,7 @@ use crate::Config;
 use lightningcss::{printer::PrinterOptions, stylesheet::StyleSheet};
 use std::{
     collections::HashMap,
+    fmt::{Debug, Display},
     fs,
     path::{Path, PathBuf},
 };
@@ -74,15 +75,21 @@ impl Generator {
 
     fn css(&mut self, path: &Path) -> Result<()> {
         let contents = fs::read_to_string(path)?;
-        let mut styles = StyleSheet::parse(&contents, Default::default())?;
+        let mut styles =
+            StyleSheet::parse(&contents, Default::default()).map_err(|err| (path, err))?;
 
-        let printer_opts = PrinterOptions {
-            minify: self.config.minify,
-            ..Default::default()
-        };
+        styles
+            .minify(Default::default())
+            .map_err(|err| (path, err))?;
 
-        styles.minify(Default::default())?;
-        fs::write(self.dest(path), styles.to_css(printer_opts)?.code)?;
+        let output = styles
+            .to_css(PrinterOptions {
+                minify: self.config.minify,
+                ..Default::default()
+            })
+            .map_err(|err| (path, err))?;
+
+        fs::write(self.dest(path), output.code)?;
 
         Ok(())
     }
@@ -121,7 +128,8 @@ impl Generator {
 
         context.try_insert("content", &comrak::markdown_to_html(&contents, &options))?;
 
-        let (props, _): (HashMap<String, toml::Value>, _) = markdown_frontmatter::parse(&contents)?;
+        let (props, _): (HashMap<String, toml::Value>, _) =
+            markdown_frontmatter::parse(&contents).map_err(|err| (path, err))?;
 
         for (key, value) in props {
             context.try_insert(key, &value)?;
@@ -166,13 +174,19 @@ impl Generator {
     }
 }
 
-#[derive(Debug)]
 pub enum GeneratorError {
     Io(std::io::Error),
-    Css(String),
-    Html(tera::Error),
-    Toml(toml::de::Error),
-    Frontmatter(markdown_frontmatter::Error),
+    Tera(tera::Error),
+
+    Css {
+        file: PathBuf,
+        err: String,
+    },
+
+    Frontmatter {
+        file: PathBuf,
+        err: markdown_frontmatter::Error,
+    },
 }
 
 impl From<std::io::Error> for GeneratorError {
@@ -181,26 +195,49 @@ impl From<std::io::Error> for GeneratorError {
     }
 }
 
-impl<T: std::fmt::Display> From<lightningcss::error::Error<T>> for GeneratorError {
-    fn from(value: lightningcss::error::Error<T>) -> Self {
-        Self::Css(value.to_string())
-    }
-}
-
 impl From<tera::Error> for GeneratorError {
     fn from(value: tera::Error) -> Self {
-        Self::Html(value)
+        Self::Tera(value)
     }
 }
 
-impl From<toml::de::Error> for GeneratorError {
-    fn from(value: toml::de::Error) -> Self {
-        Self::Toml(value)
+impl<T: Display> From<(&Path, lightningcss::error::Error<T>)> for GeneratorError {
+    fn from((file, err): (&Path, lightningcss::error::Error<T>)) -> Self {
+        Self::Css {
+            file: file.to_path_buf(),
+            err: err.to_string(),
+        }
     }
 }
 
-impl From<markdown_frontmatter::Error> for GeneratorError {
-    fn from(value: markdown_frontmatter::Error) -> Self {
-        Self::Frontmatter(value)
+impl From<(&Path, markdown_frontmatter::Error)> for GeneratorError {
+    fn from((file, err): (&Path, markdown_frontmatter::Error)) -> Self {
+        Self::Frontmatter {
+            file: file.to_path_buf(),
+            err,
+        }
+    }
+}
+
+impl Debug for GeneratorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "{err}"),
+
+            Self::Css { file, err } => {
+                writeln!(f, "While parsing the css at {}:", file.display())?;
+                write!(f, "{err}")
+            }
+
+            Self::Tera(err) => {
+                writeln!(f, "While generating tera template:")?;
+                write!(f, "{err}")
+            }
+
+            Self::Frontmatter { file, err } => {
+                writeln!(f, "While parsing the frontmatter from {}:", file.display())?;
+                write!(f, "{err}")
+            }
+        }
     }
 }
