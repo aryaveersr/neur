@@ -1,13 +1,7 @@
 use crate::Config;
-use comrak::Options;
-use lightningcss::{
-    printer::PrinterOptions,
-    stylesheet::{MinifyOptions, ParserOptions, StyleSheet},
-};
-use minify_html::Cfg;
+use lightningcss::{printer::PrinterOptions, stylesheet::StyleSheet};
 use std::{
     collections::HashMap,
-    fmt::Display,
     fs,
     path::{Path, PathBuf},
 };
@@ -80,14 +74,14 @@ impl Generator {
 
     fn css(&mut self, path: &Path) -> Result<()> {
         let contents = fs::read_to_string(path)?;
-        let mut styles = StyleSheet::parse(&contents, ParserOptions::default())?;
+        let mut styles = StyleSheet::parse(&contents, Default::default())?;
 
         let printer_opts = PrinterOptions {
             minify: self.config.minify,
             ..Default::default()
         };
 
-        styles.minify(MinifyOptions::default())?;
+        styles.minify(Default::default())?;
         fs::write(self.dest(path), styles.to_css(printer_opts)?.code)?;
 
         Ok(())
@@ -106,7 +100,7 @@ impl Generator {
             if self.config.minify {
                 fs::write(
                     self.dest(path),
-                    minify_html::minify(rendered.as_bytes(), &Cfg::default()),
+                    minify_html::minify(rendered.as_bytes(), &Default::default()),
                 )?;
             } else {
                 fs::write(self.dest(path), rendered)?;
@@ -122,7 +116,7 @@ impl Generator {
         let contents = fs::read_to_string(path)?;
         let mut context = Context::new();
 
-        let mut options = Options::default();
+        let mut options = comrak::Options::default();
         options.extension.front_matter_delimiter = Some("---".into());
 
         context.try_insert("content", &comrak::markdown_to_html(&contents, &options))?;
@@ -142,8 +136,6 @@ impl Generator {
                 .skip(1)
                 .collect::<PathBuf>();
 
-            dbg!(&trimmed_path);
-
             self.tera.autoescape_on(vec![]);
             let rendered = self.tera.render(trimmed_path.to_str().unwrap(), &context)?;
             self.tera.autoescape_on(vec![".html", ".htm", ".xml"]);
@@ -158,7 +150,7 @@ impl Generator {
         if self.config.minify {
             fs::write(
                 dest,
-                minify_html::minify(rendered.as_bytes(), &Cfg::default()),
+                minify_html::minify(rendered.as_bytes(), &Default::default()),
             )?;
         } else {
             fs::write(dest, rendered)?;
@@ -189,7 +181,7 @@ impl From<std::io::Error> for GeneratorError {
     }
 }
 
-impl<T: Display> From<lightningcss::error::Error<T>> for GeneratorError {
+impl<T: std::fmt::Display> From<lightningcss::error::Error<T>> for GeneratorError {
     fn from(value: lightningcss::error::Error<T>) -> Self {
         Self::Css(value.to_string())
     }
