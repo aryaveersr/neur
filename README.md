@@ -104,7 +104,7 @@ source = "pages"
 minify = true
 ```
 
-### Reference
+### Configuration reference
 
 - source: <directory>. Defaults to "src"
   The path to the source directory to use as input for the generator.
