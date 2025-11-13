@@ -2,6 +2,12 @@
 name = "neur"
 version = "0.1.0"
 edition = "2024"
+description = "A minimal static site generator."
+readme = "README.md"
+repository = "https://github.com/aryaveersr/neur"
+license = "GPL-3.0"
+keywords = ["jamstack", "ssg", "static site generator"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
