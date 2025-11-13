@@ -6,7 +6,13 @@ A minimalist static site generator using the [Tera templating engine](https://ke
 
 ## Installation
 
-### From source
+### Using cargo install
+
+```sh
+cargo install neur
+```
+
+### Building from source
 
 1. Clone the repository
 
@@ -97,7 +103,9 @@ neur --help # Show help.
 neur --source "pages" --output "out" --minify false
 ```
 
-### `neur.toml`
+### neur.toml
+
+Configuration can also be loaded from file. Neur, by default, looks for a `neur.toml` in project root, but you can also pass a custom config file name using `--config <FILE>`.
 
 ```toml
 source = "pages"
